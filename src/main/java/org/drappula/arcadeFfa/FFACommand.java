@@ -7,6 +7,7 @@ import io.papermc.paper.command.brigadier.Commands;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import org.bukkit.entity.Player;
 import org.drappula.arcadeApi.ArcadeAPIProvider;
+import org.drappula.arcadeApi.systems.queue.JoinResult;
 
 public class FFACommand {
     public static LiteralCommandNode<CommandSourceStack> get(FFAGame game) {
@@ -27,8 +28,9 @@ public class FFACommand {
             ctx.getSource().getSender().sendRichMessage("<red>Only players can join the FFA queue.");
             return Command.SINGLE_SUCCESS;
         }
-        if (!ArcadeAPIProvider.get().getQueueManager().joinQueue(player, game)) {
-            player.sendRichMessage("<red>Failed to join the queue.");
+        JoinResult result = ArcadeAPIProvider.get().getQueueManager().joinQueue(player, game);
+        if (result != JoinResult.SUCCESS) {
+            player.sendRichMessage("<red>Failed to join the queue: " + result.name().toLowerCase().replace('_', ' '));
             return Command.SINGLE_SUCCESS;
         }
         player.sendRichMessage("<green>Joined the FFA queue.");

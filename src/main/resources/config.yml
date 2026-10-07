@@ -1,1 +1,6 @@
 players-required: 4
+# 0 = same as players-required
+max-players: 0
+# 0 = solo free-for-all, >0 = teams of this size
+team-size: 0
+friendly-fire: false
