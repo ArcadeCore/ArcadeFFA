@@ -66,8 +66,9 @@ Wins and losses are recorded by ArcadeCore because FFA declares winners with `en
 ## Version notes
 
 - Verified: the plugin loads and `/ffa` works alongside ArcadeCore, ArcadeBedrockPillars and ArcadeHub on
-  Paper 1.8.8, 1.12.2, 1.16.5, 1.20.4, 1.21.4 and 26.3 with no errors in the log. A full bot-driven match
-  has not been run on every version yet.
+  Paper 1.8.8, 1.12.2, 1.16.5, 1.20.4, 1.21.4 and 26.3 with no errors in the log. A full two-bot match
+  (queue, countdown, kill, win, stats via /hub top) was played to completion on 1.8.8, 1.12.2, 1.16.5,
+  1.20.4, 1.21.4 and 26.1.2 with TestServer-matrix/match.js.
 - Titles and action bars come from ArcadeCore (XSeries). There is no boss bar support on any version;
   boss bar messages show as an action bar instead.
 - `kill-heal` uses `getMaxHealth()`, which is deprecated on newer servers but exists on all of them.
