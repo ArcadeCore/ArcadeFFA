@@ -2,6 +2,7 @@ name: ArcadeFFA
 description: ${description}
 version: '${version}'
 main: org.drappula.arcadeFfa.ArcadeFFA
+api-version: '1.13'
 load: POSTWORLD
 authors: [ drappula, TejasLamba2006 ]
 depend: [ ArcadeCore ]
