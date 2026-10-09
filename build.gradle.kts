@@ -14,7 +14,7 @@ dependencies {
     compileOnly("org.jspecify:jspecify:1.0.0")
     compileOnly("com.google.code.findbugs:jsr305:3.0.2")
     // Provided at runtime by ArcadeCore (plugin.yml depend).
-    compileOnly("org.drappula:ArcadeAPI:1.0.0")
+    compileOnly("org.drappula:ArcadeAPI:1.1.0")
 }
 
 java {
