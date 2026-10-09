@@ -1,49 +1,73 @@
 package org.drappula.arcadeFfa;
 
-import com.mojang.brigadier.Command;
-import com.mojang.brigadier.context.CommandContext;
-import io.papermc.paper.command.brigadier.CommandSourceStack;
-import io.papermc.paper.command.brigadier.Commands;
-import com.mojang.brigadier.tree.LiteralCommandNode;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandExecutor;
+import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 import org.drappula.arcadeApi.ArcadeAPIProvider;
+import org.drappula.arcadeApi.message.Messages;
 import org.drappula.arcadeApi.systems.queue.JoinResult;
 
-public class FFACommand {
-    public static LiteralCommandNode<CommandSourceStack> get(FFAGame game) {
-        return Commands.literal("ffa")
-                .executes(FFACommand::info)
-                .then(Commands.literal("join").executes(ctx -> join(ctx, game)))
-                .then(Commands.literal("leave").executes(FFACommand::leave))
-                .build();
+/** {@code /ffa}. A plain Bukkit executor so it works on every server version. */
+public class FFACommand implements CommandExecutor, TabCompleter {
+    private static final List<String> SUBCOMMANDS = Arrays.asList("join", "leave");
+
+    private final FFAGame game;
+
+    public FFACommand(FFAGame game) {
+        this.game = game;
     }
 
-    private static int info(CommandContext<CommandSourceStack> ctx) {
-        ctx.getSource().getSender().sendRichMessage("<aqua><b>Free For All</b></aqua> <gray>- /ffa join | /ffa leave");
-        return Command.SINGLE_SUCCESS;
-    }
-
-    private static int join(CommandContext<CommandSourceStack> ctx, FFAGame game) {
-        if (!(ctx.getSource().getSender() instanceof Player player)) {
-            ctx.getSource().getSender().sendRichMessage("<red>Only players can join the FFA queue.");
-            return Command.SINGLE_SUCCESS;
+    @Override
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        String sub = args.length == 0 ? "" : args[0].toLowerCase(Locale.ROOT);
+        if (sub.equals("join")) {
+            join(sender);
+        } else if (sub.equals("leave")) {
+            leave(sender);
+        } else {
+            Messages.chat(sender, "<aqua><b>Free For All</b></aqua> <gray>- /ffa join | /ffa leave");
         }
+        return true;
+    }
+
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
+        List<String> out = new ArrayList<String>();
+        if (args.length != 1) return out;
+        for (String sub : SUBCOMMANDS) {
+            if (sub.startsWith(args[0].toLowerCase(Locale.ROOT))) out.add(sub);
+        }
+        return out;
+    }
+
+    private void join(CommandSender sender) {
+        if (!(sender instanceof Player)) {
+            Messages.chat(sender, "<red>Only players can join the FFA queue.");
+            return;
+        }
+        Player player = (Player) sender;
         JoinResult result = ArcadeAPIProvider.get().getQueueManager().joinQueue(player, game);
         if (result != JoinResult.SUCCESS) {
-            player.sendRichMessage("<red>Failed to join the queue: " + result.name().toLowerCase().replace('_', ' '));
-            return Command.SINGLE_SUCCESS;
+            Messages.chat(player, "<red>Failed to join the queue: <reason>",
+                    "reason", result.name().toLowerCase(Locale.ROOT).replace('_', ' '));
+            return;
         }
-        player.sendRichMessage("<green>Joined the FFA queue.");
-        return Command.SINGLE_SUCCESS;
+        Messages.chat(player, "<green>Joined the FFA queue.");
     }
 
-    private static int leave(CommandContext<CommandSourceStack> ctx) {
-        if (!(ctx.getSource().getSender() instanceof Player player)) {
-            ctx.getSource().getSender().sendRichMessage("<red>Only players can leave the FFA queue.");
-            return Command.SINGLE_SUCCESS;
+    private void leave(CommandSender sender) {
+        if (!(sender instanceof Player)) {
+            Messages.chat(sender, "<red>Only players can leave the FFA queue.");
+            return;
         }
+        Player player = (Player) sender;
         ArcadeAPIProvider.get().getQueueManager().leaveQueue(player);
-        player.sendRichMessage("<yellow>Left the FFA queue.");
-        return Command.SINGLE_SUCCESS;
+        Messages.chat(player, "<yellow>Left the FFA queue.");
     }
 }

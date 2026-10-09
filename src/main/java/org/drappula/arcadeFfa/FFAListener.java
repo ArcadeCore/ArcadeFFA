@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.UUID;
 import org.bukkit.Bukkit;
 import org.bukkit.WorldBorder;
-import org.bukkit.attribute.Attribute;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
@@ -31,9 +30,9 @@ import org.drappula.arcadeApi.systems.map.IArcadeMap;
 
 public class FFAListener implements Listener {
     private final FFAGame game;
-    private final Map<IMatch, Map<UUID, Integer>> kills = new HashMap<>();
-    private final Map<IMatch, BukkitTask> timers = new HashMap<>();
-    private final Map<IMatch, double[]> borders = new HashMap<>();
+    private final Map<IMatch, Map<UUID, Integer>> kills = new HashMap<IMatch, Map<UUID, Integer>>();
+    private final Map<IMatch, BukkitTask> timers = new HashMap<IMatch, BukkitTask>();
+    private final Map<IMatch, double[]> borders = new HashMap<IMatch, double[]>();
 
     public FFAListener(FFAGame game) {
         this.game = game;
@@ -60,39 +59,53 @@ public class FFAListener implements Listener {
         recordStats(match, victim, event.getKiller());
 
         // Victim still counts as alive while this event fires; decide next tick.
-        Bukkit.getScheduler().runTask(ArcadeFFA.get(), () -> checkWin(match));
+        Bukkit.getScheduler().runTask(ArcadeFFA.get(), new Runnable() {
+            @Override
+            public void run() {
+                checkWin(match);
+            }
+        });
     }
 
     private void recordStats(IMatch match, IParticipant victim, Player killer) {
-        var stats = ArcadeAPIProvider.get().getStatsManager();
+        org.drappula.arcadeApi.database.IGameStatsManager stats = ArcadeAPIProvider.get().getStatsManager();
         try {
             Instant start = match.getStartedAt();
             if (start != null) {
-                long secs = Duration.between(start, Instant.now()).toSeconds();
+                long secs = Duration.between(start, Instant.now()).getSeconds();
                 stats.addStat(victim.getPlayer().getUniqueId(), victim.getPlayer().getName(),
                         game.getId(), "survival_seconds", (int) secs);
             }
             IParticipant killerPart = killer == null ? null : ArcadeAPIProvider.get().getParticipant(game, killer);
             if (killerPart != null && killerPart != victim && !killerPart.isEliminated()) {
                 stats.addStat(killer.getUniqueId(), killer.getName(), game.getId(), "kills", 1);
-                kills.computeIfAbsent(match, m -> new HashMap<>()).merge(killer.getUniqueId(), 1, Integer::sum);
+                Map<UUID, Integer> matchKills = kills.get(match);
+                if (matchKills == null) {
+                    matchKills = new HashMap<UUID, Integer>();
+                    kills.put(match, matchKills);
+                }
+                Integer before = matchKills.get(killer.getUniqueId());
+                matchKills.put(killer.getUniqueId(), before == null ? 1 : before + 1);
                 IArcadeMap map = match.getMap();
                 if (map != null && map.getBooleanConfig(FFAGame.KILL_HEAL_KEY)) {
-                    var max = killer.getAttribute(Attribute.MAX_HEALTH);
-                    killer.setHealth(max == null ? 20.0 : max.getValue());
+                    // getMaxHealth is deprecated on new servers but is the one call that exists from 1.8 to 26.x.
+                    killer.setHealth(killer.getMaxHealth());
                 }
             }
         } catch (SQLException e) {
-            ArcadeFFA.get().getSLF4JLogger().error("Failed to record FFA stats", e);
+            ArcadeFFA.get().getLogger().log(java.util.logging.Level.SEVERE, "Failed to record FFA stats", e);
         }
     }
 
     private void checkWin(IMatch match) {
         if (!match.isRunning()) return;
         if (game.teamSize() > 0 && match.getTeams() != null && !match.getTeams().isEmpty()) {
-            List<ITeam> left = match.getTeams().stream().filter(t -> !t.isEliminated()).toList();
+            List<ITeam> left = new ArrayList<ITeam>();
+            for (ITeam team : match.getTeams()) {
+                if (!team.isEliminated()) left.add(team);
+            }
             if (left.size() == 1) {
-                match.endWithWinners(new ArrayList<>(left.get(0).getAliveMembers()));
+                match.endWithWinners(new ArrayList<IParticipant>(left.get(0).getAliveMembers()));
             } else if (left.isEmpty()) {
                 match.end();
             }
@@ -117,28 +130,48 @@ public class FFAListener implements Listener {
         if (borderSize > 0 && map.getWorld() != null) {
             WorldBorder border = map.getWorld().getWorldBorder();
             borders.put(match, new double[]{border.getCenter().getX(), border.getCenter().getZ(), border.getSize()});
-            var spawns = map.getSpawnPoints();
+            List<org.bukkit.Location> spawns = map.getSpawnPoints();
             if (!spawns.isEmpty()) {
-                border.setCenter(spawns.stream().mapToDouble(l -> l.getX()).average().orElse(0),
-                        spawns.stream().mapToDouble(l -> l.getZ()).average().orElse(0));
+                double sumX = 0;
+                double sumZ = 0;
+                for (org.bukkit.Location spawn : spawns) {
+                    sumX += spawn.getX();
+                    sumZ += spawn.getZ();
+                }
+                border.setCenter(sumX / spawns.size(), sumZ / spawns.size());
             }
             border.setSize(borderSize);
         }
 
         int limit = map.getIntConfig(FFAGame.TIME_LIMIT_KEY);
         if (limit > 0) {
-            timers.put(match, Bukkit.getScheduler().runTaskLater(ArcadeFFA.get(), () -> timeUp(match), limit * 20L));
+            timers.put(match, Bukkit.getScheduler().runTaskLater(ArcadeFFA.get(), new Runnable() {
+                @Override
+                public void run() {
+                    timeUp(match);
+                }
+            }, limit * 20L));
         }
     }
 
     /** Time limit: alive players with the most kills win (ties share the win). */
     private void timeUp(IMatch match) {
         if (!match.isRunning()) return;
-        Map<UUID, Integer> k = kills.getOrDefault(match, Map.of());
+        Map<UUID, Integer> k = kills.get(match);
+        if (k == null) k = new HashMap<UUID, Integer>();
         List<IParticipant> alive = match.getAliveParticipants();
-        int best = alive.stream().mapToInt(p -> k.getOrDefault(p.getPlayer().getUniqueId(), 0)).max().orElse(0);
-        match.endWithWinners(alive.stream()
-                .filter(p -> k.getOrDefault(p.getPlayer().getUniqueId(), 0) == best).toList());
+        int best = 0;
+        for (IParticipant p : alive) best = Math.max(best, killsOf(k, p));
+        List<IParticipant> winners = new ArrayList<IParticipant>();
+        for (IParticipant p : alive) {
+            if (killsOf(k, p) == best) winners.add(p);
+        }
+        match.endWithWinners(winners);
+    }
+
+    private static int killsOf(Map<UUID, Integer> k, IParticipant p) {
+        Integer count = k.get(p.getPlayer().getUniqueId());
+        return count == null ? 0 : count;
     }
 
     @EventHandler
@@ -159,10 +192,15 @@ public class FFAListener implements Listener {
     /** Core declares friendly-fire but does not enforce it. */
     @EventHandler(ignoreCancelled = true)
     public void onDamage(EntityDamageByEntityEvent event) {
-        if (!(event.getEntity() instanceof Player victim)) return;
+        if (!(event.getEntity() instanceof Player)) return;
+        Player victim = (Player) event.getEntity();
         Entity damager = event.getDamager();
-        if (damager instanceof Projectile proj && proj.getShooter() instanceof Entity shooter) damager = shooter;
-        if (!(damager instanceof Player attacker)) return;
+        if (damager instanceof Projectile) {
+            Object shooter = ((Projectile) damager).getShooter();
+            if (shooter instanceof Entity) damager = (Entity) shooter;
+        }
+        if (!(damager instanceof Player)) return;
+        Player attacker = (Player) damager;
         IParticipant a = ArcadeAPIProvider.get().getParticipant(game, attacker);
         IParticipant v = ArcadeAPIProvider.get().getParticipant(game, victim);
         if (a == null || v == null || a.getTeam() == null || a.getTeam() != v.getTeam()) return;

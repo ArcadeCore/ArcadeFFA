@@ -2,12 +2,10 @@ name: ArcadeFFA
 description: ${description}
 version: '${version}'
 main: org.drappula.arcadeFfa.ArcadeFFA
-api-version: '1.21.11'
 load: POSTWORLD
 authors: [ drappula, TejasLamba2006 ]
-dependencies:
-  server:
-    ArcadeCore:
-      load: BEFORE
-      required: true
-      join-classpath: true
+depend: [ ArcadeCore ]
+commands:
+  ffa:
+    description: Free For All
+    usage: /ffa [join|leave]

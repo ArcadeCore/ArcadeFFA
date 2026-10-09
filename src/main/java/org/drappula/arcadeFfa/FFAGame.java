@@ -1,5 +1,6 @@
 package org.drappula.arcadeFfa;
 
+import java.util.Arrays;
 import java.util.List;
 import org.drappula.arcadeApi.systems.game.Game;
 import org.drappula.arcadeApi.systems.game.settings.TeamSettings;
@@ -45,7 +46,7 @@ public class FFAGame implements Game {
 
     @Override
     public List<MapConfigOption> getMapConfigOptions() {
-        return List.of(
+        return Arrays.asList(
                 MapConfigOption.integer(BORDER_SIZE_KEY, 0, 0, 60_000_000),
                 MapConfigOption.booleanOption(KILL_HEAL_KEY, false),
                 MapConfigOption.integer(TIME_LIMIT_KEY, 0, 0, 3600));
